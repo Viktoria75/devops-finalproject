@@ -10,5 +10,3 @@ def read_root():
 def health_check():
     return {"status": "ok"}
 
-# Simulating a developer leaving a hardcoded secret
-password = "secret_password_123"
