@@ -15,6 +15,6 @@ spec:
     spec:
       containers:
       - name: my-app
-        image: unba/devops-final-project:01627c005f54a7c85181473b10e9a2d4aa5a9a0f
+        image: unba/devops-final-project:8415f2bf3e95133e8eecd0e56b18503ec6094f04
         ports:
         - containerPort: 80
