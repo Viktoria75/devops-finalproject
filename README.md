@@ -64,9 +64,9 @@ graph TD
         K8s --> Pod[📦 App Pods]
     end
 
-    style Bandit fill:#ffcccc,stroke:#333
-    style ArgoCD fill:#ccffcc,stroke:#333
-    style Docker fill:#ccf,stroke:#333
+    style Bandit fill:#ffcccc,stroke:#333,color:black
+    style ArgoCD fill:#ccffcc,stroke:#333,color:black
+    style Docker fill:#ccf,stroke:#333,color:black
 ```
 
 ---
