@@ -3,6 +3,7 @@
 
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
 ![Security Scan](https://img.shields.io/badge/security-bandit%20checked-blue)
+![Container Scan](https://img.shields.io/badge/security-trivy-aqua)
 ![Platform](https://img.shields.io/badge/platform-minikube%20%7C%20kubernetes-blue)
 ![GitOps](https://img.shields.io/badge/CD-ArgoCD-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -51,6 +52,7 @@ graph TD
         GH -->|Trigger| Bandit["🛡️ SAST Scan (Bandit)"]
         Bandit -->|Pass| Docker[🐳 Docker Build]
         Docker -->|Push| Hub[☁️ Docker Hub]
+        Hub -->|Scan| Trivy[🔍 Trivy Image Scan]
     end
 
     subgraph "GitOps (CD)"
@@ -61,12 +63,16 @@ graph TD
     subgraph "Kubernetes Cluster"
         GitOps -.->|Sync| ArgoCD[🐙 ArgoCD]
         ArgoCD -->|Apply| K8s[🚀 Deployment]
-        K8s --> Pod[📦 App Pods]
+        K8s --> Service[🌐 Service]
+        Service --> Pod[📦 App Pods]
+        Ingress[🚪 Ingress] -->|Route| Service
     end
 
     style Bandit fill:#ffcccc,stroke:#333,color:black
     style ArgoCD fill:#ccffcc,stroke:#333,color:black
     style Docker fill:#ccf,stroke:#333,color:black
+    style Trivy fill:#ffcccc,stroke:#333,color:black
+    style Ingress fill:#e1d5e7,stroke:#333,color:black
 ```
 
 ---
@@ -77,10 +83,11 @@ graph TD
 | :--- | :--- | :--- |
 | **Application** | ![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi) | Python web framework for the API. |
 | **Containerization** | ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white) | Packaging the application. |
-| **Orchestration** | ![Kubernetes](https://img.shields.io/badge/kubernetes-%23326ce5.svg?style=flat&logo=kubernetes&logoColor=white) | Managing container deployment and scaling. |
+| **Orchestration** | ![Kubernetes](https://img.shields.io/badge/kubernetes-%23326ce5.svg?style=flat&logo=kubernetes&logoColor=white) | Managing container deployment, scaling, and **Ingress**. |
 | **IaC** | ![Terraform](https://img.shields.io/badge/terraform-%235835CC.svg?style=flat&logo=terraform&logoColor=white) | Provisioning Kubernetes namespaces. |
 | **CI/CD** | ![GitHub Actions](https://img.shields.io/badge/github%20actions-%232671E5.svg?style=flat&logo=githubactions&logoColor=white) | Automating testing, building, and pushing. |
-| **Security** | ![Bandit](https://img.shields.io/badge/security-bandit-red) | Static Application Security Testing (SAST) for Python. |
+| **Security (Code)** | ![Bandit](https://img.shields.io/badge/security-bandit-red) | Static Application Security Testing (SAST) for Python. |
+| **Security (Container)** | ![Trivy](https://img.shields.io/badge/security-trivy-aqua) | Vulnerability scanning for OS and dependencies. |
 
 ---
 
@@ -96,7 +103,8 @@ graph TD
 │   └── Dockerfile                 # 🐳 Container instructions
 ├── k8s/
 │   ├── deployment.yaml            # ☸️ Deployment Manifest (Auto-updated by CI)
-│   └── service.yaml               # ☸️ Service exposure strategy
+│   ├── service.yaml               # ☸️ Internal ClusterIP Service
+│   └── ingress.yaml               # 🚪 Ingress Routing Rules
 ├── terraform/
 │   ├── main.tf                    # 🏗️ IaC: Namespace provisioning
 │   └── ...
@@ -107,7 +115,7 @@ graph TD
 
 ## 🔒 Deep Dive: Security (DevSecOps)
 
-This project adopts a **"Security First"** approach by integrating **Bandit** into the pipeline.
+This project adopts a **"Security First"** approach by integrating **Bandit** (SAST) and **Trivy** (Container Security) into the pipeline.
 
 ### Why Bandit?
 Bandit is a tool designed to find common security issues in Python code. By running it *before* the Docker build step, we ensure that:
@@ -119,6 +127,11 @@ Bandit is a tool designed to find common security issues in Python code. By runn
 *   SQL injection risks.
 *   Unsafe parsing (e.g., `pickle`).
 *   Debug modes enabled in production.
+
+### Why Trivy?
+Trivy scans the final Docker image for **OS-level vulnerabilities** and **outdated dependencies** (CVEs).
+*   **Layer 7 Protection**: Ensures the base image (Python Slim) doesn't have known exploits.
+*   **Gatekeeper**: Even if the code is safe, a vulnerable OS package could compromise the pod. The pipeline fails on `CRITICAL` or `HIGH` severity issues.
 
 ---
 
@@ -134,7 +147,11 @@ The pipeline is defined in `.github/workflows/ci.yml`.
 *   **Action**: Builds the Docker image and pushes it to Docker Hub.
 *   **Tagging**: Uses the unique Git SHA (`${{ github.sha }}`) to ensure immutability and traceability.
 
-### 3. GitOps Update
+### 3. Container Scan (Trivy)
+*   **Action**: Pulled the pushed image and scans for CVEs.
+*   **Policy**: Fails the build if `CRITICAL` vulnerabilities are found.
+
+### 4. GitOps Update
 *   **Action**: Updates `k8s/deployment.yaml` with the new image tag.
 *   **Meaning**: The repository itself is the "Single Source of Truth". Changing the manifest in the repo triggers the deployment process (Conceptually via ArgoCD or simple application).
 
@@ -182,14 +199,11 @@ kubectl apply -f k8s/
 ```
 
 #### 3. Access
-Find the NodePort or Port-Forward to access the service.
-
+Add the local DNS entry (if using Minikube):
 ```bash
-kubectl get svc -n final-project
-# Or port-forward
-kubectl port-forward svc/my-app-service 8080:80 -n final-project
+echo "$(minikube ip) devops-project.local" | sudo tee -a /etc/hosts
 ```
-Then visit `http://localhost:8080`.
+Then visit `http://devops-project.local`.
 
 ---
 
@@ -197,5 +211,4 @@ Then visit `http://localhost:8080`.
 
 *   **Monitoring**: Add Prometheus & Grafana for metrics.
 *   **Testing**: Add `pytest` for unit testing before the security scan.
-*   **Ingress**: Configure an Ingress Controller for better routing.
 *   **Secret Management**: Replace K8s secrets with Vault.
